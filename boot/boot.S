@@ -1,8 +1,8 @@
-.code16									    # 16-bit Assembly (real mode)
-.text												# Mulai section text
-.set MAGIC, 0xAA55					# Macro untuk MAGIC number boot record 
-
-.globl BootEntry								# Simbol Entry Point
+.code16                     # 16-bit Assembly (real mode)
+.text                       # Mulai section text
+.set MAGIC, 0xAA55          # Macro untuk MAGIC number boot record 
+.set BPBLength, 79          # BPB For FAT32
+.globl BootEntry					# Simbol Entry Point
 
 BootEntry: 
 	cli                       # Matikan interrupt
@@ -40,3 +40,4 @@ hellostr: .asciz "Halo!"    # Simpan string `Halo' di sini 'H', 'a', 'l', 'o', '
 # ----- Akhiri boot sector ----
 .fill (510-(.-BootEntry)), 1, 0 # Isi sisanya sebelum magic dengan 0
 bootmagic: .int MAGIC       # Akhiri dengan boot magic 0xAA55
+

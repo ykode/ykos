@@ -3,5 +3,7 @@
 *.o
 *.bin
 *.out
-*.qcow
+boot/*.vdi
+boot/*.qcow
 boot/*.mbr
+boot/*.raw
