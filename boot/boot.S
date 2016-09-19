@@ -2,28 +2,48 @@
 .text                       # Mulai section text
 .set MAGIC, 0xAA55          # Macro untuk MAGIC number boot record 
 .set PRT_OFF, 0x1BE
-.globl BootEntry					# Simbol Entry Point
+.set LOAD, 0x7c00
+.set ORIGIN, 0x0600
+.globl BootEntry            # Simbol Entry Point
 
 BootEntry: 
 
-	cli                       # Matikan interrupt
-	xor %ax, %ax              # AX = 0
-	mov %ax, %ds              # DS = AX = 0
-	mov %ax, %es              # ES = AX = 0
-	mov %ax, %ss              # SS = AX = 0
-	mov $0x7c00, %sp          # Set stack dari 0x7c00 ke bawah
-	sti                       # Hidupkan interrupt
+  cli                       # Matikan interrupt
+  cld
+  xor %ax, %ax              # AX = 0
+  mov %ax, %ds              # DS = AX = 0
+  mov %ax, %es              # ES = AX = 0
+  mov %ax, %ss              # SS = AX = 0
+  mov $LOAD, %sp            # Set stack dari 0x7c00 ke bawah
+  sti                       # Hidupkan interrupt
 
+# Relakasi ke ORIGIN (0x600)
+  movw %sp, %si             # Source = SP = $LOAD
+  movw $BootEntry, %di      # Destination = ORIGIN = BootEntry
+  movw $0x100, %cx          # Ukuran = 512 -> 1 sektor (2x256)
+  rep movsw                 # Salin dari [DS:SI] -> [DS:DI]
+
+# Bikin tabel partisi setelah code (DI, 0x800)
+# Diinisialisasi dengan LBA 0 / CHS 0: 0: 1
+# Arahkan BP ke partisi dengan ofset negatif dari akhir code
+
+  movw %di, %bp             # Alamat Variable
+  movb $0x8, %cl            # Clear Words di CL 
+  rep stosw                 # Kosongkan semua
+  incb -0xe(%di)            # Set S dari CHS ke 1
+  jmp StartBoot-LOAD+ORIGIN # Lompat ke kode yang sudah direlokasi
+
+StartBoot:
 .ifdef SIO
-	movw 4800, %ax						# 9600 baud
-	callw BIOSCom             # Int 14H 
+  movw 9600, %ax            # 9600 baud
+  callw BIOSCom             # Int 14H 
 .endif
 
-	lea hellostr, %si         # Cetak `Halo!'
-	call WriteString
+  lea hellostr, %si         # Cetak `Halo!'
+  call WriteString
 
-	cli                       # Matikan interrupt
-	hlt                       # Halt (berhenti)
+  cli                       # Matikan interrupt
+  hlt                       # Halt (berhenti)
 
 /* 
  * Fungsi-fungsi tampilan
@@ -39,47 +59,47 @@ BootEntry:
 
 .func WriteN
 WriteN:
-	movw $crlf, %si
-	jmp WriteString
+  movw $crlf, %si
+  jmp WriteString
 .endfunc
 
 .func WriteString           # Fungsi WriteString direktif .func untuk menandai simbol debug
 WriteString.1: 
-	callw WriteChar
+  callw WriteChar
 WriteString:
-	lodsb											# Muat SI ke AL dan naikkan nilai SI 1 byte
-	testb $0x80, %al					# Cek apakah AL = 0x80 (EOS)
-	jz WriteString.1
-	andb $~0x80, %al					# Buang MSB dan tulis karakter terakhir
+  lodsb                     # Muat SI ke AL dan naikkan nilai SI 1 byte
+  testb $0x80, %al          # Cek apakah AL = 0x80 (EOS)
+  jz WriteString.1
+  andb $~0x80, %al          # Buang MSB dan tulis karakter terakhir
 .endfunc
 
 .func WriteChar
 WriteChar:
 .ifndef SIO
-	pushw %bx									# Simpan BX
-	movw $0x7, %bx						# Page: Atribut
-	movb $0xe, %ah						# BIOS: Display
-	int $0x10									# Cetak ke layar
-	popw %bx									# Kembalikan BX
+  pushw %bx                 # Simpan BX
+  movw $0x7, %bx            # Page: Atribut
+  movb $0xe, %ah            # BIOS: Display
+  int $0x10                 # Cetak ke layar
+  popw %bx                  # Kembalikan BX
 .else
-	movb $0x01, %ah           # BIOS: Send Character
+  movb $0x01, %ah           # BIOS: Send Character
 BIOSCom:
-	pushw %dx
-	xorw %dx, %dx
-	int $0x14
-	popw %dx
+  pushw %dx
+  xorw %dx, %dx
+  int $0x14
+  popw %dx
 .endif
-	retw
+  retw
 .endfunc
 
 
 # ----- SEGMEN DATA DI SINI ----
 crlf:
-	.ascii "\r"
-	.byte  '\n' | 0x80 
+  .ascii "\r"
+  .byte  '\n' | 0x80 
 hellostr: 
-	.ascii "Halo"
-	.byte '!' | 0x80
+  .ascii "Halo"
+  .byte '!' | 0x80
 
 # ----- Mulai tabel partisi ---
 .fill (PRT_OFF-(.-BootEntry)), 0x1, 0xFF # Isi sisanya sebelum magic dengan 0xBA (atau nilai apapun)

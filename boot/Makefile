@@ -38,7 +38,7 @@ $(BASENAME).bin: $(BASENAME).out
 
 # Membuat berkas executable dari berkas objek
 $(BASENAME).out: $(BASENAME).o
-	$(LD) -o $@ $^ -Ttext 0x7c00 -e BootEntry
+	$(LD) -o $@ $^ -Ttext 0x0600 -e BootEntry
 
 # Merakit berkas objek dari bahasa assembly
 $(BASENAME).o: boot.S
