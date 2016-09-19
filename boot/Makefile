@@ -1,7 +1,10 @@
 # Set perintah untuk assembler, linker, dan object copier
+BASENAME := boot
+DISK_BASENAME := disk
 AS := as
 LD := ld
 OBJCOPY := objcopy
+ASFLAGS := 
 
 # Target tanpa file,
 # Target selain all hanya digunakan untuk alasan kepraktisan
@@ -10,37 +13,38 @@ OBJCOPY := objcopy
 
 all: disk
 
-disk: disk.qcow disk.vdi
+disk: $(DISK_BASENAME).qcow $(DISK_BASENAME).vdi
 
-mbr: boot.mbr
+mbr: $(BASENAME).mbr
 
 # Membuat disk yang siap digunakan QEMU
-disk.raw: boot.mbr
+$(DISK_BASENAME).raw: $(BASENAME).mbr
 	dd if=/dev/zero of=$@ bs=512 count=2880
 	dd if=$< of=$@ bs=512 count=1
 	
-disk.qcow: disk.raw
+$(DISK_BASENAME).qcow: $(DISK_BASENAME).raw
 	qemu-img convert -c -O qcow2 $< $@
 	
-disk.vdi: disk.raw
+$(DISK_BASENAME).vdi: $(DISK_BASENAME).raw
 	qemu-img convert -O vdi $< $@
 
 # Membuat citra MBR 
-boot.mbr: boot.bin
+$(BASENAME).mbr: $(BASENAME).bin
 	dd of=$@ if=$< bs=512 count=1
 
 # Membuat berkas biner flat
-boot.bin: boot.out
-	$(OBJCOPY) -O binary -j .text boot.out boot.bin
+$(BASENAME).bin: $(BASENAME).out
+	$(OBJCOPY) -O binary -j .text $(BASENAME).out $(BASENAME).bin
 
 # Membuat berkas executable dari berkas objek
-boot.out: boot.o
+$(BASENAME).out: $(BASENAME).o
 	$(LD) -o $@ $^ -Ttext 0x7c00 -e BootEntry
 
 # Merakit berkas objek dari bahasa assembly
-boot.o: boot.S
-	$(AS) -g -gstabs+ -o $@ $^
+$(BASENAME).o: boot.S
+	$(AS) $(ASFLAGS) -g -gstabs+ -o $@ $^
 
 # Membersihkan berkas
 clean: 
-	rm -f boot.mbr boot.bin boot.out boot.o disk.raw disk.qcow disk.vdi 
+	rm -f $(BASENAME).mbr $(BASENAME).bin $(BASENAME).out $(BASENAME).o \
+		$(DISK_BASENAME).raw $(DISK_BASENAME).qcow $(DISK_BASENAME).vdi 

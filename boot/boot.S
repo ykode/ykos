@@ -1,10 +1,11 @@
 .code16                     # 16-bit Assembly (real mode)
 .text                       # Mulai section text
 .set MAGIC, 0xAA55          # Macro untuk MAGIC number boot record 
-.set BPBLength, 79          # BPB For FAT32
+.set PRT_OFF, 0x1BE
 .globl BootEntry					# Simbol Entry Point
 
 BootEntry: 
+
 	cli                       # Matikan interrupt
 	xor %ax, %ax              # AX = 0
 	mov %ax, %ds              # DS = AX = 0
@@ -13,31 +14,76 @@ BootEntry:
 	mov $0x7c00, %sp          # Set stack dari 0x7c00 ke bawah
 	sti                       # Hidupkan interrupt
 
+.ifdef SIO
+	movw 4800, %ax						# 9600 baud
+	callw BIOSCom             # Int 14H 
+.endif
+
 	lea hellostr, %si         # Cetak `Halo!'
 	call WriteString
 
 	cli                       # Matikan interrupt
 	hlt                       # Halt (berhenti)
 
-.func WriteString           # Fungsi WriteString direktif .func untuk menandai simbol debug
-WriteString:
-	lodsb                     # Muat 1 byte dari alamat [SI] ke AL, naikkan SI satu byte
-	or %al, %al               # Cek apakah AL = 0, instruksi OR mengubah flag ZF
-	jz .LDoneWrite            # Jika 0 lompat ke label lokal DoneWrite
+/* 
+ * Fungsi-fungsi tampilan
+ * WriteN         tulis baris baru
+ * WriteString    tulis string yang ada di register SI
+ * WriteChar      tulis karakter yang ada di AL
+ *
+ * Note: Urutan fungsi jangan diputar, karena berbeda
+ * Akhir string bukan dengan byte baru tetapi dengan meng-OR kan
+ * karakter dengan 0x80 sehingga MSB menjadi 1 sehingge menghemat 1 byte
+ * tiap string daripada dengan .asciiz
+ */
 
-	mov $0xe, %ah             # AH = 0Eh
-	xor %bx, %bx              # BX = 0
-	int $0x10                 # Cetak karakter ke layar
-	jmp WriteString           # Ulang Lagi
-.LDoneWrite:
+.func WriteN
+WriteN:
+	movw $crlf, %si
+	jmp WriteString
+.endfunc
+
+.func WriteString           # Fungsi WriteString direktif .func untuk menandai simbol debug
+WriteString.1: 
+	callw WriteChar
+WriteString:
+	lodsb											# Muat SI ke AL dan naikkan nilai SI 1 byte
+	testb $0x80, %al					# Cek apakah AL = 0x80 (EOS)
+	jz WriteString.1
+	andb $~0x80, %al					# Buang MSB dan tulis karakter terakhir
+.endfunc
+
+.func WriteChar
+WriteChar:
+.ifndef SIO
+	pushw %bx									# Simpan BX
+	movw $0x7, %bx						# Page: Atribut
+	movb $0xe, %ah						# BIOS: Display
+	int $0x10									# Cetak ke layar
+	popw %bx									# Kembalikan BX
+.else
+	movb $0x01, %ah           # BIOS: Send Character
+BIOSCom:
+	pushw %dx
+	xorw %dx, %dx
+	int $0x14
+	popw %dx
+.endif
 	retw
 .endfunc
 
+
 # ----- SEGMEN DATA DI SINI ----
+crlf:
+	.ascii "\r"
+	.byte  '\n' | 0x80 
+hellostr: 
+	.ascii "Halo"
+	.byte '!' | 0x80
 
-hellostr: .asciz "Halo!"    # Simpan string `Halo' di sini 'H', 'a', 'l', 'o', '\0'
-
-# ----- Akhiri boot sector ----
-.fill (510-(.-BootEntry)), 1, 0 # Isi sisanya sebelum magic dengan 0
+# ----- Mulai tabel partisi ---
+.fill (PRT_OFF-(.-BootEntry)), 0x1, 0xFF # Isi sisanya sebelum magic dengan 0xBA (atau nilai apapun)
+.org PRT_OFF
+.fill 0x40, 0x1, 0x0        # Tabel partisi palsu isi dengon 0
 bootmagic: .int MAGIC       # Akhiri dengan boot magic 0xAA55
 
