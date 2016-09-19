@@ -19,8 +19,9 @@ mbr: $(BASENAME).mbr
 
 # Membuat disk yang siap digunakan QEMU
 $(DISK_BASENAME).raw: $(BASENAME).mbr
-	dd if=/dev/zero of=$@ bs=512 count=2880
-	dd if=$< of=$@ bs=512 count=1
+	# 50 MB Hard Drive
+	dd if=/dev/zero of=$@ bs=512 count=100800 
+	dd if=$< of=$@ bs=512 count=1 conv=notrunc
 	
 $(DISK_BASENAME).qcow: $(DISK_BASENAME).raw
 	qemu-img convert -c -O qcow2 $< $@

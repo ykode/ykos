@@ -45,6 +45,10 @@ StartBoot:
   lea hellostr, %si         # Cetak `Halo!'
   call WriteString
 
+.ifndef SIO
+  call Reboot
+.endif
+
   cli                       # Matikan interrupt
   hlt                       # Halt (berhenti)
 
@@ -62,18 +66,19 @@ StartBoot:
 
 .func WriteN
 WriteN:
-  movw $crlf, %si
-  jmp WriteString
+  movw  $crlf, %si
+  jmp   WriteString
 .endfunc /* Write N */
 
 .func WriteString           # Fungsi WriteString direktif .func untuk menandai simbol debug
 WriteString.1: 
   callw WriteChar
+
 WriteString:
   lodsb                     # Muat SI ke AL dan naikkan nilai SI 1 byte
   testb $0x80, %al          # Cek apakah AL = 0x80 (EOS)
-  jz WriteString.1
-  andb $~0x80, %al          # Buang MSB dan tulis karakter terakhir
+  jz    WriteString.1
+  andb  $~0x80, %al          # Buang MSB dan tulis karakter terakhir
 .endfunc /* WriteString */  
 
 .func WriteChar
@@ -82,33 +87,41 @@ WriteChar:
 .ifndef SIO
 
   pushw %bx                 # Simpan BX
-  movw $0x7, %bx            # Page: Atribut
-  movb $0xe, %ah            # BIOS: Display
-  int $0x10                 # Cetak ke layar
-  popw %bx                  # Kembalikan BX
+  movw  $0x7, %bx           # Page: Atribut
+  movb  $0xe, %ah           # BIOS: Display
+  int   $0x10               # Cetak ke layar
+  popw  %bx                 # Kembalikan BX
 
 .else
 
-  movb $0x01, %ah           # BIOS: Send Character
+  movb  $0x01, %ah          # BIOS: Send Character
 
 BIOSCom:
   pushw %dx
-  xorw %dx, %dx
-  int $0x14
-  popw %dx
+  xorw  %dx, %dx
+  int   $0x14
+  popw  %dx
 
 .endif
 
   retw
 .endfunc /* WriteChar */
 
+Reboot:
+  lea   rebootmsg, %si
+  callw WriteString
+  xor   %ax, %ax
+  int   $0x16
+
+  ljmp  $0xFFFF, $0x0000  
 
 # ----- SEGMEN DATA DI SINI ----
 crlf:
   .ascii "\r" ; .byte  '\n' | 0x80 
 hellostr: 
   .ascii "Halo" ; .byte '!' | 0x80
-
+rebootmsg:
+  .ascii "Tekan tombol apapun untuk mulai ulang" ; .byte '.' | 0x80
 # ----- Mulai tabel partisi ---
 .fill (PRT_OFF-(.-BootEntry)), 0x1, 0xFF # Isi sisanya sebelum magic dengan 0xBA (atau nilai apapun)
 .org PRT_OFF
