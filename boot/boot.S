@@ -1,9 +1,9 @@
 .code16                     # 16-bit Assembly (real mode)
 .text                       # Mulai section text
 .set MAGIC, 0xAA55          # Macro untuk MAGIC number boot record 
-.set PRT_OFF, 0x1BE
-.set LOAD, 0x7c00
-.set ORIGIN, 0x0600
+.set PRT_OFF, 0x1BE         # Ofset tempat tabel partisi berada
+.set LOAD, 0x7c00           # Alamat kode ini dimuat oleh BIOS
+.set ORIGIN, 0x0600         # Alamat relokasi kode
 .globl BootEntry            # Simbol Entry Point
 
 BootEntry: 
@@ -28,16 +28,19 @@ BootEntry:
 # Arahkan BP ke partisi dengan ofset negatif dari akhir code
 
   movw %di, %bp             # Alamat Variable
-  movb $0x8, %cl            # Clear Words di CL 
+  movb $0x8, %cl            # Clear LSB 
   rep stosw                 # Kosongkan semua
   incb -0xe(%di)            # Set S dari CHS ke 1
   jmp StartBoot-LOAD+ORIGIN # Lompat ke kode yang sudah direlokasi
 
 StartBoot:
+
 .ifdef SIO
+
   movw 9600, %ax            # 9600 baud
-  callw BIOSCom             # Int 14H 
-.endif
+  callw BIOSCom             # Panggil fungsi BIOS 
+
+.endif /* SIO */
 
   lea hellostr, %si         # Cetak `Halo!'
   call WriteString
@@ -61,7 +64,7 @@ StartBoot:
 WriteN:
   movw $crlf, %si
   jmp WriteString
-.endfunc
+.endfunc /* Write N */
 
 .func WriteString           # Fungsi WriteString direktif .func untuk menandai simbol debug
 WriteString.1: 
@@ -71,35 +74,40 @@ WriteString:
   testb $0x80, %al          # Cek apakah AL = 0x80 (EOS)
   jz WriteString.1
   andb $~0x80, %al          # Buang MSB dan tulis karakter terakhir
-.endfunc
+.endfunc /* WriteString */  
 
 .func WriteChar
 WriteChar:
+
 .ifndef SIO
+
   pushw %bx                 # Simpan BX
   movw $0x7, %bx            # Page: Atribut
   movb $0xe, %ah            # BIOS: Display
   int $0x10                 # Cetak ke layar
   popw %bx                  # Kembalikan BX
+
 .else
+
   movb $0x01, %ah           # BIOS: Send Character
+
 BIOSCom:
   pushw %dx
   xorw %dx, %dx
   int $0x14
   popw %dx
+
 .endif
+
   retw
-.endfunc
+.endfunc /* WriteChar */
 
 
 # ----- SEGMEN DATA DI SINI ----
 crlf:
-  .ascii "\r"
-  .byte  '\n' | 0x80 
+  .ascii "\r" ; .byte  '\n' | 0x80 
 hellostr: 
-  .ascii "Halo"
-  .byte '!' | 0x80
+  .ascii "Halo" ; .byte '!' | 0x80
 
 # ----- Mulai tabel partisi ---
 .fill (PRT_OFF-(.-BootEntry)), 0x1, 0xFF # Isi sisanya sebelum magic dengan 0xBA (atau nilai apapun)
