@@ -10,18 +10,18 @@ BootEntry:
 
   cli                       # Matikan interrupt
   cld
-  xor %ax, %ax              # AX = 0
-  mov %ax, %ds              # DS = AX = 0
-  mov %ax, %es              # ES = AX = 0
-  mov %ax, %ss              # SS = AX = 0
-  mov $LOAD, %sp            # Set stack dari 0x7c00 ke bawah
+  xorw %ax, %ax              # AX = 0
+  movw %ax, %ds              # DS = AX = 0
+  movw %ax, %es              # ES = AX = 0
+  movw %ax, %ss              # SS = AX = 0
+  movw $LOAD, %sp            # Set stack dari 0x7c00 ke bawah
   sti                       # Hidupkan interrupt
 
 # Relakasi ke ORIGIN (0x600)
   movw %sp, %si             # Source = SP = $LOAD
   movw $BootEntry, %di      # Destination = ORIGIN = BootEntry
   movw $0x100, %cx          # Ukuran = 512 -> 1 sektor (2x256)
-  rep movsw                 # Salin dari [DS:SI] -> [DS:DI]
+  rep movsw                 # Salin dari [DS:SI] -> [ES:DI]
 
 # Bikin tabel partisi setelah code (DI, 0x800)
 # Diinisialisasi dengan LBA 0 / CHS 0: 0: 1
@@ -42,11 +42,19 @@ StartBoot:
 
 .endif /* SIO */
 
-  lea hellostr, %si         # Cetak `Halo!'
-  call WriteString
+  lea startbootmsg, %si         # Cetak `Cetak di disk'
+  callw WriteString
+
+	movb %dl, %al									# Simpan nomor disk but
+	andb $0x7F, %al								# Hilangkan MSB ( DL - 0x80)
+	addb $0x30, %al								# AL = '0' + AL
+	call WriteChar								# Tulis karakter ke layar
+	lea  elipsis, %si							# Tulis elipsis
+	call WriteString							#  ke layar
+	call WriteN										# Tulis baris baru
 
 .ifndef SIO
-  call Reboot
+  callw Reboot
 .endif
 
   cli                       # Matikan interrupt
@@ -110,7 +118,7 @@ BIOSCom:
 Reboot:
   lea   rebootmsg, %si
   callw WriteString
-  xor   %ax, %ax
+  xorw  %ax, %ax
   int   $0x16
 
   ljmp  $0xFFFF, $0x0000  
@@ -122,6 +130,10 @@ hellostr:
   .ascii "Halo" ; .byte '!' | 0x80
 rebootmsg:
   .ascii "Tekan tombol apapun untuk mulai ulang" ; .byte '.' | 0x80
+startbootmsg:
+	.ascii "But dari disk"; .byte ' ' | 0x80
+elipsis:
+	.ascii ".."; .byte '.' | 0x80
 # ----- Mulai tabel partisi ---
 .fill (PRT_OFF-(.-BootEntry)), 0x1, 0xFF # Isi sisanya sebelum magic dengan 0xBA (atau nilai apapun)
 .org PRT_OFF
