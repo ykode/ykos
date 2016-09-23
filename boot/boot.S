@@ -45,7 +45,9 @@ StartBoot:
   lea startbootmsg, %si         # Cetak `Cetak di disk'
   callw WriteString
 
-	movb %dl, %al									# Simpan nomor disk but
+# Tampilkan nomor disk boot
+
+	movb %dl, %al									# Simpan nomor disk u/ dicetak 
 	andb $0x7F, %al								# Hilangkan MSB ( DL - 0x80)
 	addb $0x30, %al								# AL = '0' + AL
 	call WriteChar								# Tulis karakter ke layar
@@ -53,6 +55,21 @@ StartBoot:
 	call WriteString							#  ke layar
 	call WriteN										# Tulis baris baru
 
+# Baca 1 sector ke 0000:7c00
+ReadSector:	
+	movw $(LOAD+PRT_OFF), %si
+	movw $LOAD, %bx
+	movb $0x2, %ah
+	movb 0x1(%si), %dh
+	movw 0x2(%si), %cx
+	movb $0x1, %al
+	int  $0x13
+
+	xor  %ah, %ah
+	int  $0x13
+
+	jmp  *%bx
+	
 .ifndef SIO
   callw Reboot
 .endif
@@ -120,7 +137,6 @@ Reboot:
   callw WriteString
   xorw  %ax, %ax
   int   $0x16
-
   ljmp  $0xFFFF, $0x0000  
 
 # ----- SEGMEN DATA DI SINI ----
