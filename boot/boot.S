@@ -4,6 +4,13 @@
 .set PRT_OFF, 0x1BE         # Ofset tempat tabel partisi berada
 .set LOAD, 0x7c00           # Alamat kode ini dimuat oleh BIOS
 .set ORIGIN, 0x0600         # Alamat relokasi kode
+
+# Informasi disk
+.set B0_BASE, 0x1ae           # Volume Serial Number
+.set B0_OFF, (B0_BASE-0x200)  # Offset 
+.set _FLAGS, B0_OFF + 9       # Flags
+.set USEPACKET, 0x8           # Pakai modus paket
+
 .globl BootEntry            # Simbol Entry Point
 
 BootEntry: 
@@ -47,29 +54,55 @@ StartBoot:
 
 # Tampilkan nomor disk boot
 
-	movb %dl, %al									# Simpan nomor disk u/ dicetak 
-	andb $0x7F, %al								# Hilangkan MSB ( DL - 0x80)
-	addb $0x30, %al								# AL = '0' + AL
-	call WriteChar								# Tulis karakter ke layar
-	lea  elipsis, %si							# Tulis elipsis
-	call WriteString							#  ke layar
-	call WriteN										# Tulis baris baru
+  movb %dl, %al                 # Simpan nomor disk u/ dicetak 
+  andb $0x7F, %al               # Hilangkan MSB ( DL - 0x80)
+  addb $0x30, %al               # AL = '0' + AL
+  call WriteChar                # Tulis karakter ke layar
+  lea  elipsis, %si             # Tulis elipsis
+  call WriteString              #  ke layar
+  call WriteN                   # Tulis baris baru
 
 # Baca 1 sector ke 0000:7c00
-ReadSector:	
-	movw $(LOAD+PRT_OFF), %si
-	movw $LOAD, %bx
-	movb $0x2, %ah
-	movb 0x1(%si), %dh
-	movw 0x2(%si), %cx
-	movb $0x1, %al
-	int  $0x13
+ReadSector:
 
-	xor  %ah, %ah
-	int  $0x13
+# Coba dengan mode CHS
+  movw $(LOAD+PRT_OFF), %si
+  movw $LOAD, %bx
+  movb $0x2, %ah
+  movb 0x1(%si), %dh
+  movw 0x2(%si), %cx
+  movb $0x1, %al
+  
+# Modifikasi nilai untuk LBA
+# BP < register tempat awal tabel partisi
+# Cek http://wiki.osdev.org/ATA_in_x86_RealMode_(BIOS)#LBA_in_Extended_Mode
+  pushw %si
+  movw  %sp, %di
+  testb $USEPACKET, _FLAGS(%bp)
+  jz ReadSector.1
 
-	jmp  *%bx
-	
+  pushl $0x0       # { uint32_t LBA48 Upper Bit = 0
+  pushl 0x8(%si)   #   uint32_t Start
+  pushw %es        #   uint32_t segment
+  pushw %bx        #   -------- offset = Tujuan
+  push  $0x1       #   uint8_t jumlah sector | uint8_t reserved (zero)
+  push  $0x10      #   ukuran paket (16 byte) }
+  movw  %sp, %si   # DS:SI arahkan ke permukaan stack
+
+  decw  %ax        # Dari CHS tadinya jumlah sektor, kita 0 kan saja 
+  orb   $0x40, %ah # AH = 2 (sudah diset sebelumnya), AH = AH | 0x40 
+                   # artinya AH=42H -> pakai modus paket
+ReadSector.1:
+  int  $0x13       # Layanan disk 
+
+  movw %di, %sp    # Kembalikan stack pointer ke semula 
+  popw %si         # Kembalikan 'source index' ke semula
+
+  xor  %ah, %ah    # Reset disk
+  int  $0x13       # --- JALANKAN!
+
+  jmp  *%bx        # Lompat ke bx=0x7c00
+  
 .ifndef SIO
   callw Reboot
 .endif
@@ -147,9 +180,9 @@ hellostr:
 rebootmsg:
   .ascii "Tekan tombol apapun untuk mulai ulang" ; .byte '.' | 0x80
 startbootmsg:
-	.ascii "But dari disk"; .byte ' ' | 0x80
+  .ascii "But dari disk"; .byte ' ' | 0x80
 elipsis:
-	.ascii ".."; .byte '.' | 0x80
+  .ascii ".."; .byte '.' | 0x80
 # ----- Mulai tabel partisi ---
 .fill (PRT_OFF-(.-BootEntry)), 0x1, 0xFF # Isi sisanya sebelum magic dengan 0xBA (atau nilai apapun)
 .org PRT_OFF

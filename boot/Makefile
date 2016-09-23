@@ -1,9 +1,9 @@
 # Set perintah untuk assembler, linker, dan object copier
 BASENAME := boot
 DISK_BASENAME := disk
-AS := as
-LD := ld
-OBJCOPY := objcopy
+AS ?= as
+LD ?= ld
+OBJCOPY ?= objcopy
 ASFLAGS := 
 
 # Target tanpa file,
