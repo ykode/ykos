@@ -4,13 +4,6 @@
 .set PRT_OFF, 0x1BE         # Ofset tempat tabel partisi berada
 .set LOAD, 0x7c00           # Alamat kode ini dimuat oleh BIOS
 .set ORIGIN, 0x0600         # Alamat relokasi kode
-
-# Informasi disk
-.set B0_BASE, 0x1ae           # Volume Serial Number
-.set B0_OFF, (B0_BASE-0x200)  # Offset 
-.set _FLAGS, B0_OFF + 9       # Flags
-.set USEPACKET, 0x8           # Pakai modus paket
-
 .globl BootEntry            # Simbol Entry Point
 
 BootEntry: 
@@ -48,11 +41,14 @@ StartBoot:
   callw BIOSCom             # Panggil fungsi BIOS 
 
 .endif /* SIO */
+  
+  lea banner, %si
+  callw WriteString
 
   lea startbootmsg, %si         # Cetak `Cetak di disk'
   callw WriteString
 
-# Tampilkan nomor disk boot
+  # Tampilkan nomor disk boot
 
   movb %dl, %al                 # Simpan nomor disk u/ dicetak 
   andb $0x7F, %al               # Hilangkan MSB ( DL - 0x80)
@@ -61,6 +57,14 @@ StartBoot:
   lea  elipsis, %si             # Tulis elipsis
   call WriteString              #  ke layar
   call WriteN                   # Tulis baris baru
+
+# Wait 1 seconds
+  mov  %dx, %di
+  movb $0x86, %ah
+  movw $0x000f, %cx
+  movw $0x4240, %dx
+  int  $0x15
+  mov  %di, %dx
 
 # Baca 1 sector ke 0000:7c00
 ReadSector:
@@ -76,10 +80,12 @@ ReadSector:
 # Modifikasi nilai untuk LBA
 # BP < register tempat awal tabel partisi
 # Cek http://wiki.osdev.org/ATA_in_x86_RealMode_(BIOS)#LBA_in_Extended_Mode
-  pushw %si
-  movw  %sp, %di
-  testb $USEPACKET, _FLAGS(%bp)
-  jz ReadSector.1
+  pushw %si        # Simpan SI ke stack
+  movw  %sp, %di   # DI = SP
+  
+  
+  testb %dl, %dl         # Check floppy, Floppy: 0x00...0x7F, HDD: 0x80..0xFE.
+  jz FloppyNotSupported  # Tidak bisa boot dari Floppy
 
   pushl $0x0       # { uint32_t LBA48 Upper Bit = 0
   pushl 0x8(%si)   #   uint32_t Start
@@ -100,13 +106,30 @@ ReadSector.1:
 
   xor  %ah, %ah    # Reset disk
   int  $0x13       # --- JALANKAN!
+  jc   DiskError   # Kalau terjadi kesalahat
 
+  movl $0x36d76289, %eax # Diisi dengan multiboot
+                         # Siapa tahu 1 sektor selanjutnya bagian dari kernel
   jmp  *%bx        # Lompat ke bx=0x7c00
-  
-.ifndef SIO
-  callw Reboot
-.endif
+ 
+FloppyNotSupported:
+  lea   nofloppy, %si
+  callw WriteString
+  callw WriteN
+  jmp   Reboot
 
+DiskError:
+  lea   diskerror, %si
+  callw WriteString
+  
+Reboot:
+  lea   rebootmsg, %si
+  callw WriteString
+  xorw  %ax, %ax
+  int   $0x16
+  ljmp  $0xFFFF, $0x0000
+
+Halt:
   cli                       # Matikan interrupt
   hlt                       # Halt (berhenti)
 
@@ -165,13 +188,6 @@ BIOSCom:
   retw
 .endfunc /* WriteChar */
 
-Reboot:
-  lea   rebootmsg, %si
-  callw WriteString
-  xorw  %ax, %ax
-  int   $0x16
-  ljmp  $0xFFFF, $0x0000  
-
 # ----- SEGMEN DATA DI SINI ----
 crlf:
   .ascii "\r" ; .byte  '\n' | 0x80 
@@ -183,6 +199,17 @@ startbootmsg:
   .ascii "But dari disk"; .byte ' ' | 0x80
 elipsis:
   .ascii ".."; .byte '.' | 0x80
+nofloppy:
+  .ascii "Boot dari floppy tidak didukung"; .byte '!' | 0x80
+diskerror:
+  .ascii "Terjadi galat pada disk"; .byte '.' | 0x80
+
+banner:
+  .ascii "----------------------\r\n"
+  .ascii "- ykOS Bootloader    -\r\n"
+  .ascii "- Hak Cipta (c) 2016 -\r\n"
+  .ascii "----------------------\r"; .byte '\n' | 0x80
+
 # ----- Mulai tabel partisi ---
 .fill (PRT_OFF-(.-BootEntry)), 0x1, 0xFF # Isi sisanya sebelum magic dengan 0xBA (atau nilai apapun)
 .org PRT_OFF
