@@ -127,7 +127,7 @@ Reboot:
   callw WriteString
   xorw  %ax, %ax
   int   $0x16
-  ljmp  $0xFFFF, $0x0000
+  ljmpw $0xF000, $0xE05B
 
 Halt:
   cli                       # Matikan interrupt
