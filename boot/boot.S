@@ -48,7 +48,7 @@ StartBoot:
   lea startbootmsg, %si         # Cetak `Cetak di disk'
   callw WriteString
 
-  # Tampilkan nomor disk boot
+# Tampilkan nomor disk boot
 
   movb %dl, %al                 # Simpan nomor disk u/ dicetak 
   andb $0x7F, %al               # Hilangkan MSB ( DL - 0x80)
@@ -56,7 +56,7 @@ StartBoot:
   call WriteChar                # Tulis karakter ke layar
   lea  elipsis, %si             # Tulis elipsis
   call WriteString              #  ke layar
-  call WriteN                   # Tulis baris baru
+  call WriteN                   # Tulis baris baru	
 
 # Wait 1 seconds
   mov  %dx, %di
@@ -202,13 +202,10 @@ elipsis:
 nofloppy:
   .ascii "Boot dari floppy tidak didukung"; .byte '!' | 0x80
 diskerror:
-  .ascii "Terjadi galat pada disk"; .byte '.' | 0x80
+  .ascii "Terjadi galat pada disk,"; .byte ' ' | 0x80
 
 banner:
-  .ascii "----------------------\r\n"
-  .ascii "- ykOS Bootloader    -\r\n"
-  .ascii "- Hak Cipta (c) 2016 -\r\n"
-  .ascii "----------------------\r"; .byte '\n' | 0x80
+  .ascii "ykOS Bootloader - os.ykode.co"; .byte 'm' | 0x80
 
 # ----- Mulai tabel partisi ---
 .fill (PRT_OFF-(.-BootEntry)), 0x1, 0xFF # Isi sisanya sebelum magic dengan 0xBA (atau nilai apapun)
