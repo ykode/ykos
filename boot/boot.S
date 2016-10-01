@@ -47,7 +47,42 @@ StartBoot:
 
   lea startbootmsg, %si         # Cetak `Cetak di disk'
   callw WriteString
+	
+	xorl %ebx, %ebx
+	xorl %eax, %eax
 
+DetectMem:
+		
+	push %esi
+	push %edi
+	movl %esp, %esi
+	movl %eax, (%esi)
+	movl %eax, 4(%esi)
+
+DetectMem.1:
+	movl $0xE820, %eax
+	movl $20, %ecx
+	movl $0x534d4150, %edx
+	int  $0x15
+
+	movl 0x10(%edi), %eax
+	cmp  $0x1, %eax
+	jne DetectMem.2
+
+	movl 8(%edi), %eax
+	addl (%esi), %eax
+	movl %eax, (%esi)
+
+	movl 12(%edi), %eax
+	adcl 4(%esi), %eax
+	movl %eax, 4(%esi)
+
+DetectMem.2:
+	orl  %ebx, %ebx
+	jnz  DetectMem.1
+	
+	pop %edi
+	pop %esi
 # Tampilkan nomor disk boot
 
   movb %dl, %al                 # Simpan nomor disk u/ dicetak 
@@ -191,19 +226,16 @@ BIOSCom:
 # ----- SEGMEN DATA DI SINI ----
 crlf:
   .ascii "\r" ; .byte  '\n' | 0x80 
-hellostr: 
-  .ascii "Halo" ; .byte '!' | 0x80
 rebootmsg:
   .ascii "Tekan tombol apapun untuk mulai ulang" ; .byte '.' | 0x80
 startbootmsg:
-  .ascii "But dari disk"; .byte ' ' | 0x80
+  .byte ' ' | 0x80
 elipsis:
   .ascii ".."; .byte '.' | 0x80
 nofloppy:
   .ascii "Boot dari floppy tidak didukung"; .byte '!' | 0x80
 diskerror:
   .ascii "Terjadi galat pada disk,"; .byte ' ' | 0x80
-
 banner:
   .ascii "ykOS Bootloader - os.ykode.co"; .byte 'm' | 0x80
 
